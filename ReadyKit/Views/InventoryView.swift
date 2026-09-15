@@ -25,7 +25,11 @@ struct InventoryView: View {
                     )
                 } else {
                     List(filteredItems) { item in
-                        ItemRow(item: item)
+                        NavigationLink {
+                            ItemDetailView(item: item)
+                        } label: {
+                            ItemRow(item: item)
+                        }
                     }
                     .listStyle(.plain)
                 }
@@ -65,9 +69,6 @@ private struct ItemRow: View {
                 }
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 5)
     }
