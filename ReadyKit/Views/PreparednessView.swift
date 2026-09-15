@@ -35,8 +35,8 @@ struct PreparednessView: View {
                         symbol: "drop.fill",
                         days: calculator.waterDays,
                         progress: calculator.waterProgress,
-                        detail: "\(calculator.totalWaterLiters, specifier: "%.1f") / \(calculator.requiredWaterLiters, specifier: "%.0f") L",
-                        missing: calculator.missingWaterLiters > 0 ? "Λείπουν \(calculator.missingWaterLiters, specifier: "%.0f") L" : "Ο στόχος καλύπτεται"
+                        detail: "\(format(calculator.totalWaterLiters, decimals: 1)) / \(format(calculator.requiredWaterLiters, decimals: 0)) L",
+                        missing: calculator.missingWaterLiters > 0 ? "Λείπουν \(format(calculator.missingWaterLiters, decimals: 0)) L" : "Ο στόχος καλύπτεται"
                     )
 
                     supplyRow(
@@ -95,6 +95,10 @@ struct PreparednessView: View {
             .font(.caption)
         }
         .padding(.vertical, 5)
+    }
+
+    private func format(_ value: Double, decimals: Int) -> String {
+        value.formatted(.number.precision(.fractionLength(decimals)))
     }
 
     private var targetLabel: String {
