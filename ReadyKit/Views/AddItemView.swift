@@ -56,7 +56,7 @@ struct AddItemView: View {
                     Section("Υπολογισμός νερού") {
                         TextField("Λίτρα ανά τεμάχιο", value: $litersPerUnit, format: .number)
                             .keyboardType(.decimalPad)
-                        LabeledContent("Συνολικό νερό", value: "\(litersPerUnit * Double(quantity), specifier: "%.1f") L")
+                        LabeledContent("Συνολικό νερό", value: "\((litersPerUnit * Double(quantity)).formatted(.number.precision(.fractionLength(1)))) L")
                     }
                 }
 
