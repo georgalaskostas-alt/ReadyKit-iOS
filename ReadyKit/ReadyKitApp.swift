@@ -1,11 +1,5 @@
-//
-//  ReadyKitApp.swift
-//  ReadyKit
-//
-//  Created by Κωνσταντινος Γεωργαλας on 15/9/26.
-//
-
 import SwiftUI
+import SwiftData
 
 @main
 struct ReadyKitApp: App {
@@ -13,5 +7,6 @@ struct ReadyKitApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: EmergencyItem.self)
     }
 }
