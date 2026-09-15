@@ -1,21 +1,21 @@
-//
-//  ContentView.swift
-//  ReadyKit
-//
-//  Created by Κωνσταντινος Γεωργαλας on 15/9/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            HomeView()
+                .tabItem { Label("Home", systemImage: "house.fill") }
+
+            InventoryView()
+                .tabItem { Label("Inventory", systemImage: "shippingbox.fill") }
+
+            PreparednessView()
+                .tabItem { Label("Preparedness", systemImage: "checklist") }
+
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
-        .padding()
+        .tint(.green)
     }
 }
 
