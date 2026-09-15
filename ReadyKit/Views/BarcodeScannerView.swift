@@ -1,5 +1,6 @@
 import SwiftUI
 import VisionKit
+import Vision
 
 struct BarcodeScannerView: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
