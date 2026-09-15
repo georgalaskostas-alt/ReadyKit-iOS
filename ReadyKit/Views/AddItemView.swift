@@ -16,6 +16,8 @@ struct AddItemView: View {
     @State private var notes = ""
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var photoData: Data?
+    @State private var litersPerUnit = 0.0
+    @State private var caloriesPerUnit = 0.0
 
     var body: some View {
         NavigationStack {
@@ -46,8 +48,24 @@ struct AddItemView: View {
                 }
 
                 Section("Ποσότητα") {
-                    Stepper("Ποσότητα: \(quantity)", value: $quantity, in: 1...999)
+                    Stepper("Ποσότητα: \(quantity)", value: $quantity, in: 1...9999)
                     TextField("Μονάδα (π.χ. τεμ., L, kg)", text: $unit)
+                }
+
+                if category == .water {
+                    Section("Υπολογισμός νερού") {
+                        TextField("Λίτρα ανά τεμάχιο", value: $litersPerUnit, format: .number)
+                            .keyboardType(.decimalPad)
+                        LabeledContent("Συνολικό νερό", value: "\(litersPerUnit * Double(quantity), specifier: "%.1f") L")
+                    }
+                }
+
+                if category == .food {
+                    Section("Υπολογισμός τροφίμων") {
+                        TextField("Θερμίδες ανά τεμάχιο", value: $caloriesPerUnit, format: .number)
+                            .keyboardType(.decimalPad)
+                        LabeledContent("Συνολικές θερμίδες", value: "\(Int(caloriesPerUnit * Double(quantity))) kcal")
+                    }
                 }
 
                 Section("Λήξη") {
@@ -107,7 +125,9 @@ struct AddItemView: View {
             expirationDate: hasExpiration ? expirationDate : nil,
             storageLocation: storageLocation,
             notes: notes,
-            photoData: photoData
+            photoData: photoData,
+            litersPerUnit: category == .water ? litersPerUnit : 0,
+            caloriesPerUnit: category == .food ? caloriesPerUnit : 0
         )
         modelContext.insert(item)
         try? modelContext.save()
