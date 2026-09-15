@@ -1,21 +1,25 @@
 import SwiftUI
 
 struct ContentView: View {
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue
+    private var isGreek: Bool { appLanguage == AppLanguage.greek.rawValue }
+
     var body: some View {
         TabView {
             HomeView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
+                .tabItem { Label(isGreek ? "Αρχική" : "Home", systemImage: "house.fill") }
 
             InventoryView()
-                .tabItem { Label("Inventory", systemImage: "shippingbox.fill") }
+                .tabItem { Label(isGreek ? "Απόθεμα" : "Inventory", systemImage: "shippingbox.fill") }
 
             PreparednessView()
-                .tabItem { Label("Preparedness", systemImage: "checklist") }
+                .tabItem { Label(isGreek ? "Ετοιμότητα" : "Preparedness", systemImage: "shield.checkered") }
 
             SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                .tabItem { Label(isGreek ? "Ρυθμίσεις" : "Settings", systemImage: "gearshape.fill") }
         }
-        .tint(.green)
+        .tint(ReadyKitTheme.accent)
+        .id(appLanguage)
     }
 }
 
