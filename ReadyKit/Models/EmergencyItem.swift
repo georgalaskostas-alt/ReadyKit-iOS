@@ -16,6 +16,10 @@ final class EmergencyItem {
     var createdAt: Date
     var updatedAt: Date
 
+    // Optional planning data. Used to calculate real emergency autonomy.
+    var litersPerUnit: Double
+    var caloriesPerUnit: Double
+
     init(
         name: String,
         category: ItemCategory = .food,
@@ -25,7 +29,9 @@ final class EmergencyItem {
         storageLocation: String = "Emergency Kit",
         notes: String = "",
         barcode: String = "",
-        photoData: Data? = nil
+        photoData: Data? = nil,
+        litersPerUnit: Double = 0,
+        caloriesPerUnit: Double = 0
     ) {
         self.id = UUID()
         self.name = name
@@ -39,12 +45,17 @@ final class EmergencyItem {
         self.photoData = photoData
         self.createdAt = .now
         self.updatedAt = .now
+        self.litersPerUnit = litersPerUnit
+        self.caloriesPerUnit = caloriesPerUnit
     }
 
     var category: ItemCategory {
         get { ItemCategory(rawValue: categoryRaw) ?? .other }
         set { categoryRaw = newValue.rawValue }
     }
+
+    var totalLiters: Double { Double(quantity) * litersPerUnit }
+    var totalCalories: Double { Double(quantity) * caloriesPerUnit }
 
     var daysUntilExpiration: Int? {
         guard let expirationDate else { return nil }
