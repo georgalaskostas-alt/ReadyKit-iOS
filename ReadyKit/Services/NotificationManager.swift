@@ -6,41 +6,36 @@ final class NotificationManager {
     private init() {}
 
     func requestAuthorization() async -> Bool {
-        do {
-            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
-        } catch {
-            return false
-        }
+        do { return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) }
+        catch { return false }
     }
 
     func scheduleExpirationNotifications(for item: EmergencyItem) async {
-        guard let expirationDate = item.expirationDate else { return }
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: identifiers(for: item))
+        guard let expirationDate = item.expirationDate else { return }
 
-        let reminders: [(days: Int, label: String)] = [
-            (180, "6 μήνες"),
-            (90, "3 μήνες"),
-            (30, "30 ημέρες"),
-            (7, "7 ημέρες")
-        ]
+        let isEnglish = UserDefaults.standard.string(forKey: "appLanguage") == AppLanguage.english.rawValue
+        let reminders = [180, 90, 30, 7]
 
-        for reminder in reminders {
-            guard let reminderDate = Calendar.current.date(byAdding: .day, value: -reminder.days, to: expirationDate),
-                  reminderDate > .now else { continue }
+        for days in reminders {
+            guard let rawDate = Calendar.current.date(byAdding: .day, value: -days, to: expirationDate) else { continue }
+            var dateParts = Calendar.current.dateComponents([.year, .month, .day], from: rawDate)
+            dateParts.hour = 9
+            dateParts.minute = 0
+            guard let reminderDate = Calendar.current.date(from: dateParts), reminderDate > .now else { continue }
+
+            let label: String
+            if isEnglish { label = days == 180 ? "6 months" : days == 90 ? "3 months" : "\(days) days" }
+            else { label = days == 180 ? "6 μήνες" : days == 90 ? "3 μήνες" : "\(days) ημέρες" }
 
             let content = UNMutableNotificationContent()
-            content.title = "ReadyKit • Λήξη προϊόντος"
-            content.body = "Το \(item.name) λήγει σε \(reminder.label). Έλεγξέ το και προγραμμάτισε αντικατάσταση."
+            content.title = isEnglish ? "ReadyKit • Item expiration" : "ReadyKit • Λήξη προϊόντος"
+            content.body = isEnglish ? "\(item.name) expires in \(label). Check it and plan a replacement." : "Το \(item.name) λήγει σε \(label). Έλεγξέ το και προγραμμάτισε αντικατάσταση."
             content.sound = .default
 
-            let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            let request = UNNotificationRequest(
-                identifier: "expiration-\(item.id.uuidString)-\(reminder.days)",
-                content: content,
-                trigger: trigger
-            )
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateParts, repeats: false)
+            let request = UNNotificationRequest(identifier: "expiration-\(item.id.uuidString)-\(days)", content: content, trigger: trigger)
             try? await center.add(request)
         }
     }
