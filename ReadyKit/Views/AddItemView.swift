@@ -6,13 +6,14 @@ struct AddItemView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue
+    @Query private var existingItems: [EmergencyItem]
 
     @State private var name = ""
     @State private var category: ItemCategory = .food
     @State private var quantity = 1
     @State private var unit = "pcs"
-    @State private var hasExpiration = true
-    @State private var expirationDate = Calendar.current.date(byAdding: .year, value: 1, to: .now) ?? .now
+    @State private var hasExpiration = false
+    @State private var expirationDate = Date.now
     @State private var storageLocation = "Emergency Kit"
     @State private var notes = ""
     @State private var barcode = ""
@@ -24,6 +25,8 @@ struct AddItemView: View {
     @State private var isLookingUpProduct = false
     @State private var lookupMessage: String?
     @State private var lookupSucceeded = false
+    @State private var duplicateItem: EmergencyItem?
+    @State private var showingDuplicateAlert = false
 
     var body: some View {
         NavigationStack {
@@ -33,57 +36,31 @@ struct AddItemView: View {
                         HStack(spacing: 16) {
                             photoPreview
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(t(photoData == nil ? "Προσθήκη φωτογραφίας" : "Αλλαγή φωτογραφίας", photoData == nil ? "Add photo" : "Change photo"))
-                                    .font(.headline)
-                                Text(t("Από τη βιβλιοθήκη ή αυτόματα από το barcode", "From your library or automatically from the barcode"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Text(t(photoData == nil ? "Προσθήκη φωτογραφίας" : "Αλλαγή φωτογραφίας", photoData == nil ? "Add photo" : "Change photo")).font(.headline)
+                                Text(t("Από τη βιβλιοθήκη ή αυτόματα από το barcode", "From your library or automatically from the barcode")).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
-                    .task(id: selectedPhoto) {
-                        photoData = try? await selectedPhoto?.loadTransferable(type: Data.self)
-                    }
-
+                    .task(id: selectedPhoto) { photoData = try? await selectedPhoto?.loadTransferable(type: Data.self) }
                     TextField(t("Όνομα προϊόντος", "Product name"), text: $name)
                     Picker(t("Κατηγορία", "Category"), selection: $category) {
-                        ForEach(ItemCategory.allCases) { item in
-                            Label(categoryName(item), systemImage: item.symbol).tag(item)
-                        }
+                        ForEach(ItemCategory.allCases) { item in Label(categoryName(item), systemImage: item.symbol).tag(item) }
                     }
                 }
 
                 Section(t("Barcode", "Barcode")) {
                     HStack {
-                        TextField(t("Κωδικός barcode", "Barcode number"), text: $barcode)
-                            .keyboardType(.numbersAndPunctuation)
-                        Button { showingScanner = true } label: {
-                            Image(systemName: "barcode.viewfinder").font(.title2)
-                        }
-                        .buttonStyle(.plain)
+                        TextField(t("Κωδικός barcode", "Barcode number"), text: $barcode).keyboardType(.numbersAndPunctuation)
+                        Button { showingScanner = true } label: { Image(systemName: "barcode.viewfinder").font(.title2) }.buttonStyle(.plain)
                     }
-
-                    Button { showingScanner = true } label: {
-                        Label(t("Σάρωση με κάμερα", "Scan with camera"), systemImage: "camera.viewfinder")
-                    }
-
+                    Button { showingScanner = true } label: { Label(t("Σάρωση με κάμερα", "Scan with camera"), systemImage: "camera.viewfinder") }
                     if !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Button {
-                            Task { await lookupProduct() }
-                        } label: {
-                            HStack {
-                                Label(t("Εύρεση προϊόντος online", "Find product online"), systemImage: "sparkle.magnifyingglass")
-                                Spacer()
-                                if isLookingUpProduct { ProgressView() }
-                            }
-                        }
-                        .disabled(isLookingUpProduct)
+                        Button { Task { await lookupProduct() } } label: {
+                            HStack { Label(t("Εύρεση προϊόντος online", "Find product online"), systemImage: "sparkle.magnifyingglass"); Spacer(); if isLookingUpProduct { ProgressView() } }
+                        }.disabled(isLookingUpProduct)
                     }
-
                     if let lookupMessage {
-                        Label(lookupMessage, systemImage: lookupSucceeded ? "checkmark.circle.fill" : "info.circle.fill")
-                            .font(.footnote)
-                            .foregroundStyle(lookupSucceeded ? .green : .secondary)
+                        Label(lookupMessage, systemImage: lookupSucceeded ? "checkmark.circle.fill" : "info.circle.fill").font(.footnote).foregroundStyle(lookupSucceeded ? .green : .secondary)
                     }
                 }
 
@@ -98,7 +75,6 @@ struct AddItemView: View {
                         LabeledContent(t("Συνολικό νερό", "Total water"), value: "\((litersPerUnit * Double(quantity)).formatted(.number.precision(.fractionLength(1)))) L")
                     }
                 }
-
                 if category == .food {
                     Section(t("Υπολογισμός τροφίμων", "Food calculation")) {
                         TextField(t("Θερμίδες ανά τεμάχιο", "Calories per item"), value: $caloriesPerUnit, format: .number).keyboardType(.decimalPad)
@@ -108,7 +84,11 @@ struct AddItemView: View {
 
                 Section(t("Λήξη", "Expiration")) {
                     Toggle(t("Έχει ημερομηνία λήξης", "Has expiration date"), isOn: $hasExpiration)
-                    if hasExpiration { DatePicker(t("Ημερομηνία", "Date"), selection: $expirationDate, displayedComponents: .date) }
+                    if hasExpiration {
+                        DatePicker(t("Ημερομηνία", "Date"), selection: $expirationDate, in: Calendar.current.startOfDay(for: .now)..., displayedComponents: .date)
+                    } else {
+                        Label(t("Δεν έχει οριστεί ημερομηνία λήξης", "Expiration date not set"), systemImage: "calendar.badge.questionmark").font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
 
                 Section(t("Αποθήκευση", "Storage")) {
@@ -120,101 +100,67 @@ struct AddItemView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(t("Ακύρωση", "Cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(t("Αποθήκευση", "Save")) { save() }
-                        .fontWeight(.semibold)
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+                ToolbarItem(placement: .confirmationAction) { Button(t("Αποθήκευση", "Save")) { saveOrCheckDuplicate() }.fontWeight(.semibold).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }
             .sheet(isPresented: $showingScanner) {
-                BarcodeScannerSheet { scannedCode in
-                    barcode = scannedCode
-                    Task { await lookupProduct() }
-                }
+                BarcodeScannerSheet { scannedCode in barcode = scannedCode; Task { await lookupProduct() } }
+            }
+            .alert(t("Το προϊόν υπάρχει ήδη", "Item already exists"), isPresented: $showingDuplicateAlert, presenting: duplicateItem) { existing in
+                Button(t("Προσθήκη +\(quantity)", "Add +\(quantity)")) { addQuantity(to: existing) }
+                Button(t("Νέα καταχώρηση", "Create separate entry")) { saveNewItem() }
+                Button(t("Ακύρωση", "Cancel"), role: .cancel) {}
+            } message: { existing in
+                Text(t("Υπάρχουν ήδη \(existing.quantity) \(existing.unit) × \(existing.name). Θέλεις να αυξήσεις την ποσότητα ή να κρατήσεις ξεχωριστή καταχώρηση;", "You already have \(existing.quantity) \(existing.unit) × \(existing.name). Increase its quantity or create a separate entry?"))
             }
             .id(appLanguage)
         }
     }
 
     @ViewBuilder private var photoPreview: some View {
-        if let photoData, let image = UIImage(data: photoData) {
-            Image(uiImage: image).resizable().scaledToFill().frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        } else {
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.quaternary).frame(width: 72, height: 72)
-                .overlay { Image(systemName: "camera.fill").font(.title2).foregroundStyle(.secondary) }
-        }
+        if let photoData, let image = UIImage(data: photoData) { Image(uiImage: image).resizable().scaledToFill().frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+        else { RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.quaternary).frame(width: 72, height: 72).overlay { Image(systemName: "camera.fill").font(.title2).foregroundStyle(.secondary) } }
     }
 
-    private func t(_ greek: String, _ english: String) -> String {
-        appLanguage == AppLanguage.english.rawValue ? english : greek
-    }
-
+    private func t(_ greek: String, _ english: String) -> String { appLanguage == AppLanguage.english.rawValue ? english : greek }
     private func categoryName(_ category: ItemCategory) -> String {
-        switch category {
-        case .water: return t("Νερό", "Water")
-        case .food: return t("Τρόφιμα", "Food")
-        case .firstAid: return t("Πρώτες βοήθειες", "First Aid")
-        case .medication: return t("Φάρμακα", "Medication")
-        case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting")
-        case .hygiene: return t("Υγιεινή", "Hygiene")
-        case .tools: return t("Εξοπλισμός", "Equipment")
-        case .documents: return t("Έγγραφα", "Documents")
-        case .other: return t("Άλλο", "Other")
-        }
+        switch category { case .water: return t("Νερό", "Water"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") }
     }
 
-    @MainActor
-    private func lookupProduct() async {
+    @MainActor private func lookupProduct() async {
         let code = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty, !isLookingUpProduct else { return }
-
-        isLookingUpProduct = true
-        lookupMessage = t("Αναζήτηση προϊόντος…", "Looking up product…")
-        lookupSucceeded = false
+        if let existing = existingItems.first(where: { !$0.barcode.isEmpty && $0.barcode == code }) {
+            duplicateItem = existing
+            lookupMessage = t("Υπάρχει ήδη στο απόθεμα: \(existing.name) × \(existing.quantity)", "Already in inventory: \(existing.name) × \(existing.quantity)")
+        }
+        isLookingUpProduct = true; lookupMessage = lookupMessage ?? t("Αναζήτηση προϊόντος…", "Looking up product…"); lookupSucceeded = false
         defer { isLookingUpProduct = false }
-
         do {
             let result = try await ProductLookupService.shared.lookup(barcode: code)
-            name = result.name
-            category = .food
-
-            if let quantityText = result.quantityText, !quantityText.isEmpty {
-                unit = quantityText
+            name = result.name; category = .food
+            if let quantityText = result.quantityText, !quantityText.isEmpty { unit = quantityText }
+            if let kcal100g = result.caloriesPer100g, let amount = result.productQuantity, let amountUnit = result.productQuantityUnit?.lowercased() {
+                if amountUnit == "g" { caloriesPerUnit = kcal100g * amount / 100.0 }
+                else if amountUnit == "kg" { caloriesPerUnit = kcal100g * amount * 10.0 }
             }
-
-            if let kcal100g = result.caloriesPer100g,
-               let amount = result.productQuantity,
-               let amountUnit = result.productQuantityUnit?.lowercased() {
-                if amountUnit == "g" {
-                    caloriesPerUnit = kcal100g * amount / 100.0
-                } else if amountUnit == "kg" {
-                    caloriesPerUnit = kcal100g * amount * 10.0
-                }
-            }
-
-            if let imageURL = result.imageURL,
-               let imageData = await ProductLookupService.shared.downloadImage(from: imageURL) {
-                photoData = imageData
-            }
-
-            if let brand = result.brand, !brand.isEmpty, !name.localizedCaseInsensitiveContains(brand) {
-                notes = notes.isEmpty ? brand : notes
-            }
-
-            lookupSucceeded = true
-            lookupMessage = t("Το προϊόν βρέθηκε και συμπληρώθηκε αυτόματα.", "Product found and filled in automatically.")
-        } catch ProductLookupError.notFound {
-            lookupMessage = t("Δεν βρέθηκε στη βάση. Μπορείς να το συμπληρώσεις χειροκίνητα.", "Product not found. You can enter it manually.")
-        } catch {
-            lookupMessage = t("Δεν ήταν δυνατή η online αναζήτηση. Δοκίμασε ξανά.", "Online lookup failed. Please try again.")
-        }
+            if let imageURL = result.imageURL, let imageData = await ProductLookupService.shared.downloadImage(from: imageURL) { photoData = imageData }
+            if let brand = result.brand, !brand.isEmpty, !name.localizedCaseInsensitiveContains(brand) { notes = notes.isEmpty ? brand : notes }
+            lookupSucceeded = true; lookupMessage = t("Το προϊόν βρέθηκε και συμπληρώθηκε αυτόματα.", "Product found and filled in automatically.")
+        } catch ProductLookupError.notFound { lookupMessage = t("Δεν βρέθηκε στη βάση. Μπορείς να το συμπληρώσεις χειροκίνητα.", "Product not found. You can enter it manually.") }
+        catch { lookupMessage = t("Δεν ήταν δυνατή η online αναζήτηση. Δοκίμασε ξανά.", "Online lookup failed. Please try again.") }
     }
 
-    private func save() {
+    private func saveOrCheckDuplicate() {
+        let code = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !code.isEmpty, let existing = existingItems.first(where: { $0.barcode == code }) { duplicateItem = existing; showingDuplicateAlert = true; return }
+        saveNewItem()
+    }
+    private func addQuantity(to existing: EmergencyItem) {
+        existing.quantity += quantity; existing.updatedAt = .now
+        try? modelContext.save(); Task { await NotificationManager.shared.scheduleExpirationNotifications(for: existing) }; dismiss()
+    }
+    private func saveNewItem() {
         let item = EmergencyItem(name: name.trimmingCharacters(in: .whitespacesAndNewlines), category: category, quantity: quantity, unit: unit, expirationDate: hasExpiration ? expirationDate : nil, storageLocation: storageLocation, notes: notes, barcode: barcode, photoData: photoData, litersPerUnit: category == .water ? litersPerUnit : 0, caloriesPerUnit: category == .food ? caloriesPerUnit : 0)
-        modelContext.insert(item)
-        try? modelContext.save()
-        Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }
-        dismiss()
+        modelContext.insert(item); try? modelContext.save(); Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss()
     }
 }
