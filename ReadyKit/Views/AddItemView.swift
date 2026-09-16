@@ -5,6 +5,7 @@ import PhotosUI
 struct AddItemView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue
 
     @State private var name = ""
     @State private var category: ItemCategory = .food
@@ -20,18 +21,21 @@ struct AddItemView: View {
     @State private var litersPerUnit = 0.0
     @State private var caloriesPerUnit = 0.0
     @State private var showingScanner = false
+    @State private var isLookingUpProduct = false
+    @State private var lookupMessage: String?
+    @State private var lookupSucceeded = false
 
     var body: some View {
         NavigationStack {
             Form {
-                Section(L10n.text("Προϊόν", "Product")) {
+                Section(t("Προϊόν", "Product")) {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         HStack(spacing: 16) {
                             photoPreview
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(L10n.text(photoData == nil ? "Προσθήκη φωτογραφίας" : "Αλλαγή φωτογραφίας", photoData == nil ? "Add photo" : "Change photo"))
+                                Text(t(photoData == nil ? "Προσθήκη φωτογραφίας" : "Αλλαγή φωτογραφίας", photoData == nil ? "Add photo" : "Change photo"))
                                     .font(.headline)
-                                Text(L10n.text("Από τη βιβλιοθήκη φωτογραφιών", "From your photo library"))
+                                Text(t("Από τη βιβλιοθήκη ή αυτόματα από το barcode", "From your library or automatically from the barcode"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -41,70 +45,94 @@ struct AddItemView: View {
                         photoData = try? await selectedPhoto?.loadTransferable(type: Data.self)
                     }
 
-                    TextField(L10n.text("Όνομα προϊόντος", "Product name"), text: $name)
-                    Picker(L10n.text("Κατηγορία", "Category"), selection: $category) {
+                    TextField(t("Όνομα προϊόντος", "Product name"), text: $name)
+                    Picker(t("Κατηγορία", "Category"), selection: $category) {
                         ForEach(ItemCategory.allCases) { item in
                             Label(categoryName(item), systemImage: item.symbol).tag(item)
                         }
                     }
                 }
 
-                Section(L10n.text("Barcode", "Barcode")) {
+                Section(t("Barcode", "Barcode")) {
                     HStack {
-                        TextField(L10n.text("Κωδικός barcode", "Barcode number"), text: $barcode)
+                        TextField(t("Κωδικός barcode", "Barcode number"), text: $barcode)
                             .keyboardType(.numbersAndPunctuation)
                         Button { showingScanner = true } label: {
                             Image(systemName: "barcode.viewfinder").font(.title2)
                         }
                         .buttonStyle(.plain)
                     }
+
                     Button { showingScanner = true } label: {
-                        Label(L10n.text("Σάρωση με κάμερα", "Scan with camera"), systemImage: "camera.viewfinder")
+                        Label(t("Σάρωση με κάμερα", "Scan with camera"), systemImage: "camera.viewfinder")
+                    }
+
+                    if !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button {
+                            Task { await lookupProduct() }
+                        } label: {
+                            HStack {
+                                Label(t("Εύρεση προϊόντος online", "Find product online"), systemImage: "sparkle.magnifyingglass")
+                                Spacer()
+                                if isLookingUpProduct { ProgressView() }
+                            }
+                        }
+                        .disabled(isLookingUpProduct)
+                    }
+
+                    if let lookupMessage {
+                        Label(lookupMessage, systemImage: lookupSucceeded ? "checkmark.circle.fill" : "info.circle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(lookupSucceeded ? .green : .secondary)
                     }
                 }
 
-                Section(L10n.text("Ποσότητα", "Quantity")) {
-                    Stepper(L10n.text("Ποσότητα: \(quantity)", "Quantity: \(quantity)"), value: $quantity, in: 1...9999)
-                    TextField(L10n.text("Μονάδα (π.χ. τεμ., L, kg)", "Unit (e.g. pcs, L, kg)"), text: $unit)
+                Section(t("Ποσότητα", "Quantity")) {
+                    Stepper(t("Ποσότητα: \(quantity)", "Quantity: \(quantity)"), value: $quantity, in: 1...9999)
+                    TextField(t("Μονάδα (π.χ. τεμ., L, kg)", "Unit (e.g. pcs, L, kg)"), text: $unit)
                 }
 
                 if category == .water {
-                    Section(L10n.text("Υπολογισμός νερού", "Water calculation")) {
-                        TextField(L10n.text("Λίτρα ανά τεμάχιο", "Liters per item"), value: $litersPerUnit, format: .number).keyboardType(.decimalPad)
-                        LabeledContent(L10n.text("Συνολικό νερό", "Total water"), value: "\((litersPerUnit * Double(quantity)).formatted(.number.precision(.fractionLength(1)))) L")
+                    Section(t("Υπολογισμός νερού", "Water calculation")) {
+                        TextField(t("Λίτρα ανά τεμάχιο", "Liters per item"), value: $litersPerUnit, format: .number).keyboardType(.decimalPad)
+                        LabeledContent(t("Συνολικό νερό", "Total water"), value: "\((litersPerUnit * Double(quantity)).formatted(.number.precision(.fractionLength(1)))) L")
                     }
                 }
 
                 if category == .food {
-                    Section(L10n.text("Υπολογισμός τροφίμων", "Food calculation")) {
-                        TextField(L10n.text("Θερμίδες ανά τεμάχιο", "Calories per item"), value: $caloriesPerUnit, format: .number).keyboardType(.decimalPad)
-                        LabeledContent(L10n.text("Συνολικές θερμίδες", "Total calories"), value: "\(Int(caloriesPerUnit * Double(quantity))) kcal")
+                    Section(t("Υπολογισμός τροφίμων", "Food calculation")) {
+                        TextField(t("Θερμίδες ανά τεμάχιο", "Calories per item"), value: $caloriesPerUnit, format: .number).keyboardType(.decimalPad)
+                        LabeledContent(t("Συνολικές θερμίδες", "Total calories"), value: "\(Int(caloriesPerUnit * Double(quantity))) kcal")
                     }
                 }
 
-                Section(L10n.text("Λήξη", "Expiration")) {
-                    Toggle(L10n.text("Έχει ημερομηνία λήξης", "Has expiration date"), isOn: $hasExpiration)
-                    if hasExpiration { DatePicker(L10n.text("Ημερομηνία", "Date"), selection: $expirationDate, displayedComponents: .date) }
+                Section(t("Λήξη", "Expiration")) {
+                    Toggle(t("Έχει ημερομηνία λήξης", "Has expiration date"), isOn: $hasExpiration)
+                    if hasExpiration { DatePicker(t("Ημερομηνία", "Date"), selection: $expirationDate, displayedComponents: .date) }
                 }
 
-                Section(L10n.text("Αποθήκευση", "Storage")) {
-                    TextField(L10n.text("Τοποθεσία", "Location"), text: $storageLocation)
-                    TextField(L10n.text("Σημειώσεις", "Notes"), text: $notes, axis: .vertical).lineLimit(3...6)
+                Section(t("Αποθήκευση", "Storage")) {
+                    TextField(t("Τοποθεσία", "Location"), text: $storageLocation)
+                    TextField(t("Σημειώσεις", "Notes"), text: $notes, axis: .vertical).lineLimit(3...6)
                 }
             }
-            .navigationTitle(L10n.text("Νέο προϊόν", "New Item"))
+            .navigationTitle(t("Νέο προϊόν", "New Item"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Ακύρωση", "Cancel")) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(t("Ακύρωση", "Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("Αποθήκευση", "Save")) { save() }
+                    Button(t("Αποθήκευση", "Save")) { save() }
                         .fontWeight(.semibold)
                         .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .sheet(isPresented: $showingScanner) {
-                BarcodeScannerSheet { barcode = $0 }
+                BarcodeScannerSheet { scannedCode in
+                    barcode = scannedCode
+                    Task { await lookupProduct() }
+                }
             }
+            .id(appLanguage)
         }
     }
 
@@ -117,17 +145,68 @@ struct AddItemView: View {
         }
     }
 
+    private func t(_ greek: String, _ english: String) -> String {
+        appLanguage == AppLanguage.english.rawValue ? english : greek
+    }
+
     private func categoryName(_ category: ItemCategory) -> String {
         switch category {
-        case .water: return L10n.text("Νερό", "Water")
-        case .food: return L10n.text("Τρόφιμα", "Food")
-        case .firstAid: return L10n.text("Πρώτες βοήθειες", "First Aid")
-        case .medication: return L10n.text("Φάρμακα", "Medication")
-        case .power: return L10n.text("Ρεύμα & Φωτισμός", "Power & Lighting")
-        case .hygiene: return L10n.text("Υγιεινή", "Hygiene")
-        case .tools: return L10n.text("Εξοπλισμός", "Equipment")
-        case .documents: return L10n.text("Έγγραφα", "Documents")
-        case .other: return L10n.text("Άλλο", "Other")
+        case .water: return t("Νερό", "Water")
+        case .food: return t("Τρόφιμα", "Food")
+        case .firstAid: return t("Πρώτες βοήθειες", "First Aid")
+        case .medication: return t("Φάρμακα", "Medication")
+        case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting")
+        case .hygiene: return t("Υγιεινή", "Hygiene")
+        case .tools: return t("Εξοπλισμός", "Equipment")
+        case .documents: return t("Έγγραφα", "Documents")
+        case .other: return t("Άλλο", "Other")
+        }
+    }
+
+    @MainActor
+    private func lookupProduct() async {
+        let code = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty, !isLookingUpProduct else { return }
+
+        isLookingUpProduct = true
+        lookupMessage = t("Αναζήτηση προϊόντος…", "Looking up product…")
+        lookupSucceeded = false
+        defer { isLookingUpProduct = false }
+
+        do {
+            let result = try await ProductLookupService.shared.lookup(barcode: code)
+            name = result.name
+            category = .food
+
+            if let quantityText = result.quantityText, !quantityText.isEmpty {
+                unit = quantityText
+            }
+
+            if let kcal100g = result.caloriesPer100g,
+               let amount = result.productQuantity,
+               let amountUnit = result.productQuantityUnit?.lowercased() {
+                if amountUnit == "g" {
+                    caloriesPerUnit = kcal100g * amount / 100.0
+                } else if amountUnit == "kg" {
+                    caloriesPerUnit = kcal100g * amount * 10.0
+                }
+            }
+
+            if let imageURL = result.imageURL,
+               let imageData = await ProductLookupService.shared.downloadImage(from: imageURL) {
+                photoData = imageData
+            }
+
+            if let brand = result.brand, !brand.isEmpty, !name.localizedCaseInsensitiveContains(brand) {
+                notes = notes.isEmpty ? brand : notes
+            }
+
+            lookupSucceeded = true
+            lookupMessage = t("Το προϊόν βρέθηκε και συμπληρώθηκε αυτόματα.", "Product found and filled in automatically.")
+        } catch ProductLookupError.notFound {
+            lookupMessage = t("Δεν βρέθηκε στη βάση. Μπορείς να το συμπληρώσεις χειροκίνητα.", "Product not found. You can enter it manually.")
+        } catch {
+            lookupMessage = t("Δεν ήταν δυνατή η online αναζήτηση. Δοκίμασε ξανά.", "Online lookup failed. Please try again.")
         }
     }
 
