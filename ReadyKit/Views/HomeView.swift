@@ -33,6 +33,7 @@ struct HomeView: View {
                         attentionSection
                         beReadyFooter
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 28)
                 }
@@ -58,33 +59,37 @@ struct HomeView: View {
     }
 
     private var hero: some View {
-        ZStack(alignment: .bottom) {
-            Image("readykit_hero_mountains")
-                .resizable().scaledToFill().frame(height: 250).clipped()
-            LinearGradient(colors: [.black.opacity(0.04), .black.opacity(0.22), .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
-            VStack(spacing: 15) {
-                Spacer()
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Label(t("ΕΤΟΙΜΟΤΗΤΑ ΟΙΚΟΓΕΝΕΙΑΣ", "HOUSEHOLD READINESS"), systemImage: "shield.fill")
-                            .font(.caption2.bold()).tracking(1).foregroundStyle(.green)
-                        Text(t("Η ετοιμότητά σου", "Your preparedness")).font(.title2.bold()).foregroundStyle(.white)
-                        Text(t("\(protectedPeople) άτομα • στόχος \(targetLabel)", "\(protectedPeople) people • \(targetLabel) target"))
-                            .font(.subheadline).foregroundStyle(.white.opacity(0.72))
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                Image("readykit_water_card")
+                    .resizable().scaledToFill()
+                    .frame(width: geo.size.width, height: 250).clipped()
+                LinearGradient(colors: [.black.opacity(0.04), .black.opacity(0.22), .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
+                VStack(spacing: 15) {
+                    Spacer()
+                    HStack(alignment: .bottom, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Label(t("ΕΤΟΙΜΟΤΗΤΑ ΟΙΚΟΓΕΝΕΙΑΣ", "HOUSEHOLD READINESS"), systemImage: "shield.fill")
+                                .font(.caption2.bold()).tracking(1).foregroundStyle(.green).lineLimit(1)
+                            Text(t("Η ετοιμότητά σου", "Your preparedness")).font(.title2.bold()).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.75)
+                            Text(t("\(protectedPeople) άτομα • στόχος \(targetLabel)", "\(protectedPeople) people • \(targetLabel) target"))
+                                .font(.subheadline).foregroundStyle(.white.opacity(0.72)).lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        readinessRing
                     }
-                    Spacer()
-                    readinessRing
-                }
-                HStack {
-                    Label(t("\(items.count) προϊόντα", "\(items.count) items"), systemImage: "shippingbox.fill")
-                    Spacer()
-                    Label(t("\(Set(items.map(\.categoryRaw)).count) κατηγορίες", "\(Set(items.map(\.categoryRaw)).count) categories"), systemImage: "square.grid.2x2.fill")
-                }.font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.72))
-            }.padding(18)
+                    HStack {
+                        Label(t("\(items.count) προϊόντα", "\(items.count) items"), systemImage: "shippingbox.fill")
+                        Spacer()
+                        Label(t("\(Set(items.map(\.categoryRaw)).count) κατηγορίες", "\(Set(items.map(\.categoryRaw)).count) categories"), systemImage: "square.grid.2x2.fill")
+                    }.font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.72))
+                }.padding(18)
+            }
+            .frame(width: geo.size.width, height: 250)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.10)))
         }
         .frame(height: 250)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.10)))
     }
 
     private var readinessRing: some View {
@@ -96,63 +101,75 @@ struct HomeView: View {
                 Text("\(readiness)%").font(.title3.bold().monospacedDigit()).foregroundStyle(.white)
                 Text("READY").font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.58))
             }
-        }.frame(width: 82, height: 82)
+        }.frame(width: 78, height: 78)
     }
 
     private var supplyCards: some View {
-        HStack(spacing: 12) {
-            SupplyImageCard(title: t("Νερό", "Water"), asset: "readykit_water_card", days: calculator.waterDays, progress: calculator.waterProgress, appLanguage: appLanguage)
-            SupplyImageCard(title: t("Τρόφιμα", "Food"), asset: "readykit_food_card", days: calculator.foodDays, progress: calculator.foodProgress, appLanguage: appLanguage)
-        }
+        GeometryReader { geo in
+            let cardWidth = max(0, (geo.size.width - 12) / 2)
+            HStack(spacing: 12) {
+                SupplyImageCard(title: t("Νερό", "Water"), asset: "readykit_hero_mountains", days: calculator.waterDays, progress: calculator.waterProgress, appLanguage: appLanguage)
+                    .frame(width: cardWidth)
+                SupplyImageCard(title: t("Τρόφιμα", "Food"), asset: "readykit_food_card", days: calculator.foodDays, progress: calculator.foodProgress, appLanguage: appLanguage)
+                    .frame(width: cardWidth)
+            }
+        }.frame(height: 154)
     }
 
     private var quickActions: some View {
-        HStack(spacing: 12) {
-            NavigationLink { ExpirationCenterView() } label: {
-                ZStack(alignment: .bottomLeading) {
-                    Image("readykit_expiration_card").resizable().scaledToFill().frame(height: 108).clipped()
-                    LinearGradient(colors: [.clear, .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(t("Λήξεις & Rotation", "Expiration & Rotation")).font(.subheadline.bold()).foregroundStyle(.white)
-                        Text(t("\(expiringSoon + expired) για έλεγχο", "\(expiringSoon + expired) need attention")).font(.caption2).foregroundStyle(.white.opacity(0.72))
-                    }.padding(12)
-                }
-                .frame(maxWidth: .infinity, minHeight: 108).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.10)))
-            }.buttonStyle(.plain)
+        GeometryReader { geo in
+            let scanWidth: CGFloat = 105
+            let expirationWidth = max(0, geo.size.width - scanWidth - 12)
+            HStack(spacing: 12) {
+                NavigationLink { ExpirationCenterView() } label: {
+                    ZStack(alignment: .bottomLeading) {
+                        Image("readykit_expiration_card").resizable().scaledToFill()
+                            .frame(width: expirationWidth, height: 108).clipped()
+                        LinearGradient(colors: [.clear, .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(t("Λήξεις & Rotation", "Expiration & Rotation")).font(.subheadline.bold()).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.75)
+                            Text(t("\(expiringSoon + expired) για έλεγχο", "\(expiringSoon + expired) need attention")).font(.caption2).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+                        }.padding(12)
+                    }
+                    .frame(width: expirationWidth, height: 108)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.10)))
+                }.buttonStyle(.plain)
 
-            Button { showingQuickScanner = true } label: {
-                VStack(spacing: 8) {
-                    Image(systemName: "barcode.viewfinder").font(.system(size: 31, weight: .semibold)).foregroundStyle(.green)
-                    Text("SCAN").font(.caption.bold()).tracking(1.4).foregroundStyle(.white)
-                    Text(t("Προσθήκη", "Add item")).font(.caption2).foregroundStyle(.white.opacity(0.45))
-                }
-                .frame(width: 105, height: 108)
-                .background(LinearGradient(colors: [.green.opacity(0.17), .white.opacity(0.035)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22).stroke(.green.opacity(0.35)))
-            }.buttonStyle(.plain)
-        }
+                Button { showingQuickScanner = true } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "barcode.viewfinder").font(.system(size: 31, weight: .semibold)).foregroundStyle(.green)
+                        Text("SCAN").font(.caption.bold()).tracking(1.4).foregroundStyle(.white)
+                        Text(t("Προσθήκη", "Add item")).font(.caption2).foregroundStyle(.white.opacity(0.45))
+                    }
+                    .frame(width: scanWidth, height: 108)
+                    .background(LinearGradient(colors: [.green.opacity(0.17), .white.opacity(0.035)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 22).stroke(.green.opacity(0.35)))
+                }.buttonStyle(.plain)
+            }
+        }.frame(height: 108)
     }
 
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 11) {
             Text(t("Κατηγορίες", "Categories")).font(.title3.bold()).foregroundStyle(.white)
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
                 ForEach(ItemCategory.allCases.prefix(6)) { category in
                     let count = items.filter { $0.category == category }.reduce(0) { $0 + $1.quantity }
-                    HStack(spacing: 11) {
-                        Image(systemName: category.symbol).foregroundStyle(.green).frame(width: 38, height: 38).background(.green.opacity(0.11), in: Circle())
+                    HStack(spacing: 10) {
+                        Image(systemName: category.symbol).foregroundStyle(.green).frame(width: 36, height: 36).background(.green.opacity(0.11), in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(categoryName(category)).font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
+                            Text(categoryName(category)).font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.72)
                             Text(t("\(count) συνολικά", "\(count) total")).font(.caption2).foregroundStyle(.white.opacity(0.45))
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(12).background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .padding(11).frame(maxWidth: .infinity)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.055)))
                 }
             }
-        }
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private var attentionSection: some View {
@@ -178,7 +195,7 @@ struct HomeView: View {
                         }.padding(13).background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18))
                     }.buttonStyle(.plain)
                 }
-            }
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -200,20 +217,23 @@ private struct SupplyImageCard: View {
     let appLanguage: String
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            Image(asset).resizable().scaledToFill().frame(height: 154).clipped()
-            LinearGradient(colors: [.black.opacity(0.02), .black.opacity(0.28), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.headline.bold()).foregroundStyle(.white)
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("~\(Int(days.rounded(.down)))").font(.title3.bold().monospacedDigit()).foregroundStyle(.white)
-                    Text(appLanguage == AppLanguage.english.rawValue ? "days" : "ημέρες").font(.caption).foregroundStyle(.white.opacity(0.70))
-                }
-                ProgressView(value: progress).tint(progress >= 1 ? .green : progress >= 0.5 ? .orange : .red)
-            }.padding(13)
+        GeometryReader { geo in
+            ZStack(alignment: .bottomLeading) {
+                Image(asset).resizable().scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height).clipped()
+                LinearGradient(colors: [.black.opacity(0.02), .black.opacity(0.28), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.headline.bold()).foregroundStyle(.white)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("~\(Int(days.rounded(.down)))").font(.title3.bold().monospacedDigit()).foregroundStyle(.white)
+                        Text(appLanguage == AppLanguage.english.rawValue ? "days" : "ημέρες").font(.caption).foregroundStyle(.white.opacity(0.70))
+                    }
+                    ProgressView(value: progress).tint(progress >= 1 ? .green : progress >= 0.5 ? .orange : .red)
+                }.padding(13)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.09)))
         }
-        .frame(maxWidth: .infinity, minHeight: 154)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.09)))
     }
 }
