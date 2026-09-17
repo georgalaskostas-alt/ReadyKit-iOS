@@ -127,7 +127,7 @@ struct PreparednessView: View {
     }
 
     private func supplyRow(category: ItemCategory, title: String, value: String, missing: String, progress: Double, accent: Color) -> some View {
-        NavigationLink { InventoryView(initialCategory: category) } label: {
+        NavigationLink { InventoryView(category: category) } label: {
             HStack(spacing: 11) {
                 Image(systemName: category.symbol).font(.title3.bold()).foregroundStyle(accent).frame(width: 48, height: 48).background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 15))
                 VStack(alignment: .leading, spacing: 5) {
@@ -143,7 +143,7 @@ struct PreparednessView: View {
 
     private func miniCategory(_ category: ItemCategory, title: String, accent: Color) -> some View {
         let p = categoryProgress(category)
-        return NavigationLink { InventoryView(initialCategory: category) } label: {
+        return NavigationLink { InventoryView(category: category) } label: {
             VStack(spacing: 4) {
                 Image(systemName: category.symbol).font(.caption.bold()).foregroundStyle(accent)
                 Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.65)
@@ -154,7 +154,7 @@ struct PreparednessView: View {
 
     private func readinessRing(_ category: ItemCategory, title: String, accent: Color) -> some View {
         let progress = categoryProgress(category)
-        return NavigationLink { InventoryView(initialCategory: category) } label: {
+        return NavigationLink { InventoryView(category: category) } label: {
             VStack(spacing: 7) {
                 ZStack {
                     Circle().stroke(.white.opacity(0.10), lineWidth: 8)
