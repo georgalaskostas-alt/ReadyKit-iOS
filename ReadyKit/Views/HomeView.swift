@@ -95,8 +95,12 @@ struct HomeView: View {
         GeometryReader { geo in
             let cardWidth = max(0, (geo.size.width - 12) / 2)
             HStack(spacing: 12) {
-                SupplyImageCard(title: t("Νερό", "Water"), asset: "readykit_hero_mountains", symbol: "drop.fill", accent: .cyan, days: calculator.waterDays, progress: calculator.waterProgress, target: t("από \(Int(calculator.requiredWaterLiters)) L στόχο", "of \(Int(calculator.requiredWaterLiters)) L target"), appLanguage: appLanguage).frame(width: cardWidth)
-                SupplyImageCard(title: t("Τρόφιμα", "Food"), asset: "readykit_food_card", symbol: "fork.knife", accent: .orange, days: calculator.foodDays, progress: calculator.foodProgress, target: t("από \(Int(calculator.requiredFoodCalories)) kcal στόχο", "of \(Int(calculator.requiredFoodCalories)) kcal target"), appLanguage: appLanguage).frame(width: cardWidth)
+                NavigationLink { InventoryView(category: .water) } label: {
+                    SupplyImageCard(title: t("Νερό", "Water"), asset: "readykit_hero_mountains", symbol: "drop.fill", accent: .cyan, days: calculator.waterDays, progress: calculator.waterProgress, target: t("από \(Int(calculator.requiredWaterLiters)) L στόχο", "of \(Int(calculator.requiredWaterLiters)) L target"), appLanguage: appLanguage)
+                }.buttonStyle(.plain).frame(width: cardWidth)
+                NavigationLink { InventoryView(category: .food) } label: {
+                    SupplyImageCard(title: t("Τρόφιμα", "Food"), asset: "readykit_food_card", symbol: "fork.knife", accent: .orange, days: calculator.foodDays, progress: calculator.foodProgress, target: t("από \(Int(calculator.requiredFoodCalories)) kcal στόχο", "of \(Int(calculator.requiredFoodCalories)) kcal target"), appLanguage: appLanguage)
+                }.buttonStyle(.plain).frame(width: cardWidth)
             }
         }.frame(height: 154)
     }
@@ -132,30 +136,38 @@ struct HomeView: View {
             HStack {
                 Text(t("Κατηγορίες", "Categories")).font(.title3.bold()).foregroundStyle(.white)
                 Spacer()
-                HStack(spacing: 5) { Text(t("Όλα", "See all")); Image(systemName: "chevron.right") }.font(.caption).foregroundStyle(.white.opacity(0.72))
+                NavigationLink { InventoryView() } label: {
+                    HStack(spacing: 5) { Text(t("Όλα", "See all")); Image(systemName: "chevron.right") }.font(.caption).foregroundStyle(.white.opacity(0.72))
+                }.buttonStyle(.plain)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 3), spacing: 10) {
                 ForEach(ItemCategory.allCases.prefix(6)) { category in
-                    let count = items.filter { $0.category == category }.reduce(0) { $0 + $1.quantity }
-                    let accent = categoryAccent(category)
-                    HStack(spacing: 8) {
-                        ZStack {
-                            Circle().fill(accent.opacity(0.18))
-                            Image(systemName: category.symbol).font(.system(size: 18, weight: .bold)).foregroundStyle(accent)
-                        }.frame(width: 38, height: 38)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(categoryName(category)).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.72)
-                            Text(t("\(count) τεμ.", "\(count) items")).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.caption2.bold()).foregroundStyle(.white.opacity(0.62))
-                    }
-                    .padding(.horizontal, 9).frame(maxWidth: .infinity, minHeight: 66)
-                    .background(LinearGradient(colors: [accent.opacity(0.18), accent.opacity(0.07)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(accent.opacity(0.42), lineWidth: 0.8))
+                    NavigationLink { InventoryView(category: category) } label: {
+                        categoryCard(category)
+                    }.buttonStyle(.plain)
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func categoryCard(_ category: ItemCategory) -> some View {
+        let count = items.filter { $0.category == category }.reduce(0) { $0 + $1.quantity }
+        let accent = categoryAccent(category)
+        return HStack(spacing: 8) {
+            ZStack {
+                Circle().fill(accent.opacity(0.18))
+                Image(systemName: category.symbol).font(.system(size: 18, weight: .bold)).foregroundStyle(accent)
+            }.frame(width: 38, height: 38)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(categoryName(category)).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.72)
+                Text(t("\(count) τεμ.", "\(count) items")).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption2.bold()).foregroundStyle(.white.opacity(0.62))
+        }
+        .padding(.horizontal, 9).frame(maxWidth: .infinity, minHeight: 66)
+        .background(LinearGradient(colors: [accent.opacity(0.18), accent.opacity(0.07)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(accent.opacity(0.42), lineWidth: 0.8))
     }
 
     @ViewBuilder private var attentionSection: some View {
@@ -183,7 +195,7 @@ struct HomeView: View {
     private var targetLabel: String { targetDays >= 60 ? t("\(targetDays == 365 ? 12 : targetDays / 30) μήνες", "\(targetDays == 365 ? 12 : targetDays / 30) months") : t("\(targetDays) ημέρες", "\(targetDays) days") }
     private func t(_ el: String, _ en: String) -> String { appLanguage == AppLanguage.english.rawValue ? en : el }
     private func categoryAccent(_ c: ItemCategory) -> Color { switch c { case .water: return .cyan; case .food: return .orange; case .firstAid: return .red; case .medication: return .purple; case .power: return .yellow; case .hygiene: return .cyan; default: return .green } }
-    private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό", "Water"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φως", "Power & Light"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
+    private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό & Ροφήματα", "Water & Drinks"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φως", "Power & Light"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
 }
 
 private struct SupplyImageCard: View {
