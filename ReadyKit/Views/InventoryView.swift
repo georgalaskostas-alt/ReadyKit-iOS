@@ -10,17 +10,40 @@ struct InventoryView: View {
     @State private var editingItem: EmergencyItem?
     @State private var deletingItem: EmergencyItem?
 
+    let categoryFilter: ItemCategory?
+
+    init(category: ItemCategory? = nil) {
+        self.categoryFilter = category
+    }
+
+    private var categoryItems: [EmergencyItem] {
+        guard let categoryFilter else { return items }
+        return items.filter { $0.category == categoryFilter }
+    }
+
     private var filteredItems: [EmergencyItem] {
-        guard !searchText.isEmpty else { return items }
-        return items.filter { $0.name.localizedCaseInsensitiveContains(searchText) || categoryName($0.category).localizedCaseInsensitiveContains(searchText) }
+        guard !searchText.isEmpty else { return categoryItems }
+        return categoryItems.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            categoryName($0.category).localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var screenTitle: String {
+        guard let categoryFilter else { return t("Απόθεμα", "Inventory") }
+        return categoryName(categoryFilter)
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
-                if items.isEmpty {
-                    ContentUnavailableView(t("Το kit είναι άδειο", "Your kit is empty"), systemImage: "shippingbox", description: Text(t("Πρόσθεσε το πρώτο προϊόν ή εφόδιο στο ReadyKit.", "Add your first emergency supply to ReadyKit.")))
+                if categoryItems.isEmpty {
+                    ContentUnavailableView(
+                        categoryFilter == nil ? t("Το kit είναι άδειο", "Your kit is empty") : t("Δεν υπάρχουν προϊόντα", "No items in this category"),
+                        systemImage: categoryFilter?.symbol ?? "shippingbox",
+                        description: Text(categoryFilter == nil ? t("Πρόσθεσε το πρώτο προϊόν ή εφόδιο στο ReadyKit.", "Add your first emergency supply to ReadyKit.") : t("Πρόσθεσε προϊόντα στην κατηγορία \(screenTitle).", "Add items to the \(screenTitle) category."))
+                    )
                 } else {
                     List {
                         Section {
@@ -40,8 +63,8 @@ struct InventoryView: View {
                             }
                         } header: {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(t("Απόθεμα", "Inventory")).font(.title2.bold()).textCase(nil).foregroundStyle(.primary)
-                                Text(t("\(items.count) καταχωρήσεις", "\(items.count) entries")).font(.subheadline).foregroundStyle(.secondary).textCase(nil)
+                                Text(screenTitle).font(.title2.bold()).textCase(nil).foregroundStyle(.primary)
+                                Text(t("\(categoryItems.count) καταχωρήσεις", "\(categoryItems.count) entries")).font(.subheadline).foregroundStyle(.secondary).textCase(nil)
                             }.padding(.bottom, 4)
                         }
                     }
@@ -49,7 +72,7 @@ struct InventoryView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .navigationTitle(t("Απόθεμα", "Inventory"))
+            .navigationTitle(screenTitle)
             .searchable(text: $searchText, prompt: t("Αναζήτηση προϊόντος", "Search items"))
             .toolbar { Button { showingAddItem = true } label: { Image(systemName: "plus").font(.headline).foregroundStyle(.white).frame(width: 36, height: 36).background(.green, in: Circle()) } }
             .sheet(isPresented: $showingAddItem) { AddItemView() }
@@ -65,7 +88,7 @@ struct InventoryView: View {
     private func t(_ greek: String, _ english: String) -> String { appLanguage == AppLanguage.english.rawValue ? english : greek }
     private func changeQuantity(_ item: EmergencyItem, by delta: Int) { item.quantity = max(1, item.quantity + delta); item.updatedAt = .now; try? modelContext.save() }
     private func delete(_ item: EmergencyItem) { NotificationManager.shared.removeNotifications(for: item); modelContext.delete(item); try? modelContext.save(); deletingItem = nil }
-    private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό", "Water"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
+    private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό & Ροφήματα", "Water & Drinks"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
 }
 
 private struct ItemRow: View {
@@ -91,5 +114,5 @@ private struct ItemRow: View {
     private func t(_ greek: String, _ english: String) -> String { appLanguage == AppLanguage.english.rawValue ? english : greek }
     private func expirationText(_ days: Int) -> String { if days < 0 { return t("Έληξε πριν από \(abs(days)) ημέρες", "Expired \(abs(days)) days ago") }; if days == 0 { return t("Λήγει σήμερα", "Expires today") }; return t("Λήγει σε \(days) ημέρες", "Expires in \(days) days") }
     private var statusColor: Color { switch item.expirationStatus { case .good, .noExpiration: return .green; case .soon: return .orange; case .urgent, .expired: return .red } }
-    private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό", "Water"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
+    private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό & Ροφήματα", "Water & Drinks"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
 }
