@@ -6,10 +6,13 @@ struct AddItemView: View {
     @Environment(\.dismiss) private var dismiss; @Environment(\.modelContext) private var modelContext
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue; @Query private var existingItems: [EmergencyItem]
     @State private var name = ""; @State private var category: ItemCategory = .food; @State private var quantity = 1; @State private var unit = "pcs"
-    @State private var hasExpiration = false; @State private var expirationDate = Date.now; @State private var storageLocation = "Emergency Kit"; @State private var notes = ""; @State private var barcode = ""
+    @State private var hasExpiration = false; @State private var expirationDate = Date.now; @State private var storageLocation = "Emergency Kit"; @State private var notes = ""; @State private var barcode: String
     @State private var selectedPhoto: PhotosPickerItem?; @State private var photoData: Data?; @State private var litersPerUnit = 0.0; @State private var caloriesPerUnit = 0.0
     @State private var showingScanner = false; @State private var showingCamera = false; @State private var showingExpiryCamera = false; @State private var isRecognizingExpiry = false; @State private var expiryMessage: String?
     @State private var isLookingUpProduct = false; @State private var lookupMessage: String?; @State private var lookupSucceeded = false; @State private var duplicateItem: EmergencyItem?; @State private var showingDuplicateAlert = false
+    @State private var didAutoLookup = false
+
+    init(initialBarcode: String = "") { _barcode = State(initialValue: initialBarcode) }
 
     var body: some View {
         NavigationStack { Form {
@@ -38,6 +41,7 @@ struct AddItemView: View {
         }
         .navigationTitle(t("Νέο προϊόν", "New Item")).navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(t("Ακύρωση", "Cancel")) { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button(t("Αποθήκευση", "Save")) { saveOrCheckDuplicate() }.fontWeight(.semibold).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
+        .task { guard !didAutoLookup else { return }; didAutoLookup = true; if !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { await lookupProduct() } }
         .sheet(isPresented: $showingScanner) { BarcodeScannerSheet { barcode = $0; Task { await lookupProduct() } } }
         .fullScreenCover(isPresented: $showingCamera) { CameraPicker { photoData = $0.jpegData(compressionQuality: 0.82) } }
         .fullScreenCover(isPresented: $showingExpiryCamera) { CameraPicker { image in Task { await recognizeExpiry(image) } } }
