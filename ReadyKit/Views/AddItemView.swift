@@ -5,6 +5,7 @@ import PhotosUI
 struct AddItemView: View {
     @Environment(\.dismiss) private var dismiss; @Environment(\.modelContext) private var modelContext
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue; @Query private var existingItems: [EmergencyItem]
+    @State private var saveError: String?
     @State private var name = ""; @State private var category: ItemCategory = .food; @State private var quantity = 1; @State private var unit = "pcs"
     @State private var hasExpiration = false; @State private var expirationDate = Date.now; @State private var storageLocation = "Emergency Kit"; @State private var notes = ""; @State private var barcode: String
     @State private var selectedPhoto: PhotosPickerItem?; @State private var photoData: Data?; @State private var litersPerUnit = 0.0; @State private var caloriesPerUnit = 0.0
@@ -17,7 +18,7 @@ struct AddItemView: View {
     var body: some View {
         NavigationStack { Form {
             Section(t("Προϊόν", "Product")) {
-                HStack(spacing: 14) { photoPreview; VStack(alignment: .leading, spacing: 8) { PhotosPicker(selection: $selectedPhoto, matching: .images) { Label(t("Φωτογραφίες", "Photos"), systemImage: "photo.on.rectangle") }; Button { showingCamera = true } label: { Label(t("Λήψη φωτογραφίας", "Take Photo"), systemImage: "camera") } } }.task(id: selectedPhoto) { photoData = try? await selectedPhoto?.loadTransferable(type: Data.self) }
+                HStack(spacing: 14) { photoPreview; VStack(alignment: .leading, spacing: 8) { PhotosPicker(selection: $selectedPhoto, matching: .images) { Label(t("Φωτογραφίες", "Photos"), systemImage: "photo.on.rectangle") }.buttonStyle(.borderless); Button { selectedPhoto = nil; showingCamera = true } label: { Label(t("Λήψη φωτογραφίας", "Take Photo"), systemImage: "camera") }.buttonStyle(.borderless) } }.task(id: selectedPhoto) { guard let selectedPhoto else { return }; if let data = try? await selectedPhoto.loadTransferable(type: Data.self), !Task.isCancelled, UIImage(data: data) != nil { photoData = data } }
                 TextField(t("Όνομα προϊόντος", "Product name"), text: $name)
                 Picker(t("Κατηγορία", "Category"), selection: $category) { ForEach(ItemCategory.allCases) { c in Label(categoryName(c), systemImage: c.symbol).tag(c) } }
             }
@@ -43,6 +44,9 @@ struct AddItemView: View {
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(t("Ακύρωση", "Cancel")) { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button(t("Αποθήκευση", "Save")) { saveOrCheckDuplicate() }.fontWeight(.semibold).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
         .task { guard !didAutoLookup else { return }; didAutoLookup = true; if !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { await lookupProduct() } }
         .sheet(isPresented: $showingScanner) { BarcodeScannerSheet { barcode = $0; Task { await lookupProduct() } } }
+        .alert(t("Η αποθήκευση απέτυχε", "Save failed"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: { Text(saveError ?? "") }
         .fullScreenCover(isPresented: $showingCamera) { CameraPicker { photoData = $0.jpegData(compressionQuality: 0.82) } }
         .fullScreenCover(isPresented: $showingExpiryCamera) { CameraPicker { image in Task { await recognizeExpiry(image) } } }
         .alert(t("Το προϊόν υπάρχει ήδη", "Item already exists"), isPresented: $showingDuplicateAlert, presenting: duplicateItem) { existing in Button(t("Προσθήκη +\(quantity)", "Add +\(quantity)")) { addQuantity(to: existing) }; Button(t("Νέα παρτίδα", "Create new batch")) { saveNewItem() }; Button(t("Ακύρωση", "Cancel"), role: .cancel) {} } message: { existing in Text(t("Υπάρχουν ήδη \(existing.quantity) \(existing.unit) × \(existing.name). Αν η νέα συσκευασία έχει διαφορετική λήξη, επίλεξε Νέα παρτίδα.", "You already have \(existing.quantity) \(existing.unit) × \(existing.name). If this package has a different expiry date, create a new batch.")) }
@@ -63,16 +67,20 @@ struct AddItemView: View {
         if let existing = existingItems.first(where: { !$0.barcode.isEmpty && $0.barcode == code }) { duplicateItem = existing; lookupMessage = t("Υπάρχει ήδη: \(existing.name) × \(existing.quantity)", "Already in inventory: \(existing.name) × \(existing.quantity)") }
         isLookingUpProduct = true; lookupSucceeded = false; if duplicateItem == nil { lookupMessage = t("Αναζήτηση προϊόντος…", "Looking up product…") }; defer { isLookingUpProduct = false }
         do {
-            let result = try await ProductLookupService.shared.lookup(barcode: code); name = result.name
+            let result = try await ProductLookupService.shared.lookup(barcode: code)
+            guard barcode.trimmingCharacters(in: .whitespacesAndNewlines) == code else { return }
+            name = result.name
             if result.isWater { category = .water; if let liters = result.packageLiters { litersPerUnit = liters; unit = "pcs" } } else { category = .food; if let kcal = result.packageCalories { caloriesPerUnit = kcal }; unit = "pcs" }
-            if let imageURL = result.imageURL, let data = await ProductLookupService.shared.downloadImage(from: imageURL) { photoData = data }
+            if photoData == nil, let imageURL = result.imageURL, let data = await ProductLookupService.shared.downloadImage(from: imageURL), UIImage(data: data) != nil, photoData == nil, barcode.trimmingCharacters(in: .whitespacesAndNewlines) == code { photoData = data }
+            guard barcode.trimmingCharacters(in: .whitespacesAndNewlines) == code else { return }
             if let brand = result.brand, !brand.isEmpty, !name.localizedCaseInsensitiveContains(brand) { notes = notes.isEmpty ? brand : notes }
             lookupSucceeded = true
             let packageInfo = result.isWater && result.packageLiters != nil ? t(" • λίτρα συμπληρώθηκαν", " • liters filled") : (!result.isWater && result.packageCalories != nil ? t(" • θερμίδες συσκευασίας υπολογίστηκαν", " • package calories calculated") : "")
             lookupMessage = t("Βρέθηκε: \(result.name)", "Found: \(result.name)") + packageInfo
-        } catch ProductLookupError.notFound { lookupMessage = t("Δεν βρέθηκε στη βάση. Χρησιμοποίησε φωτογραφία ή χειροκίνητη καταχώρηση.", "Product not found. Use a photo or enter it manually.") } catch { lookupMessage = t("Η online αναζήτηση απέτυχε. Δοκίμασε ξανά.", "Online lookup failed. Try again.") }
+            if photoData == nil { lookupMessage = (lookupMessage ?? "") + t(" • Δεν φορτώθηκε φωτογραφία. Πρόσθεσε από τη συλλογή ή την κάμερα.", " • No photo loaded. Add one from Photos or Camera.") }
+        } catch is CancellationError { return } catch let error as URLError where error.code == .cancelled { return } catch let error as URLError where error.code == .notConnectedToInternet { lookupMessage = t("Δεν υπάρχει σύνδεση στο internet.", "No internet connection.") } catch let error as URLError where error.code == .timedOut { lookupMessage = t("Η αναζήτηση άργησε πολύ. Δοκίμασε ξανά.", "Lookup timed out. Please try again.") } catch ProductLookupError.notFound { lookupMessage = t("Δεν βρέθηκε στο Open Food Facts. Χρησιμοποίησε φωτογραφία ή χειροκίνητη καταχώρηση.", "Product not found in Open Food Facts. Use a photo or enter it manually.") } catch { lookupMessage = t("Η online αναζήτηση απέτυχε. Δοκίμασε ξανά.", "Online lookup failed. Try again.") }
     }
     private func saveOrCheckDuplicate() { let code = barcode.trimmingCharacters(in: .whitespacesAndNewlines); if !code.isEmpty, let existing = existingItems.first(where: { $0.barcode == code }) { duplicateItem = existing; showingDuplicateAlert = true } else { saveNewItem() } }
-    private func addQuantity(to existing: EmergencyItem) { existing.quantity += quantity; existing.updatedAt = .now; try? modelContext.save(); Task { await NotificationManager.shared.scheduleExpirationNotifications(for: existing) }; dismiss() }
-    private func saveNewItem() { let item = EmergencyItem(name: name.trimmingCharacters(in: .whitespacesAndNewlines), category: category, quantity: quantity, unit: unit, expirationDate: hasExpiration ? expirationDate : nil, storageLocation: storageLocation, notes: notes, barcode: barcode, photoData: photoData, litersPerUnit: category == .water ? litersPerUnit : 0, caloriesPerUnit: category == .food ? caloriesPerUnit : 0); modelContext.insert(item); try? modelContext.save(); Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
+    private func addQuantity(to existing: EmergencyItem) { let oldQuantity = existing.quantity; let oldDate = existing.updatedAt; let oldPhoto = existing.photoData; existing.quantity += quantity; existing.updatedAt = .now; if let photoData { existing.photoData = photoData }; do { try modelContext.save() } catch { existing.quantity = oldQuantity; existing.updatedAt = oldDate; existing.photoData = oldPhoto; saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: existing) }; dismiss() }
+    private func saveNewItem() { let item = EmergencyItem(name: name.trimmingCharacters(in: .whitespacesAndNewlines), category: category, quantity: quantity, unit: unit, expirationDate: hasExpiration ? expirationDate : nil, storageLocation: storageLocation, notes: notes, barcode: barcode, photoData: photoData, litersPerUnit: category == .water ? litersPerUnit : 0, caloriesPerUnit: category == .food ? caloriesPerUnit : 0); modelContext.insert(item); do { try modelContext.save() } catch { modelContext.delete(item); saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
 }

@@ -7,6 +7,7 @@ struct EditItemView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue
     let item: EmergencyItem
+    @State private var saveError: String?
     @State private var name: String; @State private var category: ItemCategory; @State private var quantity: Int; @State private var unit: String
     @State private var hasExpiration: Bool; @State private var expirationDate: Date; @State private var storageLocation: String; @State private var notes: String; @State private var barcode: String
     @State private var litersPerUnit: Double; @State private var caloriesPerUnit: Double; @State private var photoData: Data?; @State private var selectedPhoto: PhotosPickerItem?; @State private var showingScanner = false; @State private var showingCamera = false
@@ -20,7 +21,7 @@ struct EditItemView: View {
         NavigationStack {
             Form {
                 Section(t("Προϊόν", "Product")) {
-                    HStack(spacing: 16) { photoPreview; VStack(alignment: .leading, spacing: 8) { PhotosPicker(selection: $selectedPhoto, matching: .images) { Label(t("Φωτογραφίες", "Photos"), systemImage: "photo.on.rectangle") }; Button { showingCamera = true } label: { Label(t("Λήψη φωτογραφίας", "Take Photo"), systemImage: "camera") } } }.task(id: selectedPhoto) { if let data = try? await selectedPhoto?.loadTransferable(type: Data.self) { photoData = data } }
+                    HStack(spacing: 16) { photoPreview; VStack(alignment: .leading, spacing: 8) { PhotosPicker(selection: $selectedPhoto, matching: .images) { Label(t("Φωτογραφίες", "Photos"), systemImage: "photo.on.rectangle") }.buttonStyle(.borderless); Button { selectedPhoto = nil; showingCamera = true } label: { Label(t("Λήψη φωτογραφίας", "Take Photo"), systemImage: "camera") }.buttonStyle(.borderless) } }.task(id: selectedPhoto) { guard let selectedPhoto else { return }; if let data = try? await selectedPhoto.loadTransferable(type: Data.self), !Task.isCancelled, UIImage(data: data) != nil { photoData = data } }
                     TextField(t("Όνομα", "Name"), text: $name)
                     Picker(t("Κατηγορία", "Category"), selection: $category) { ForEach(ItemCategory.allCases) { c in Label(categoryName(c), systemImage: c.symbol).tag(c) } }
                 }
@@ -32,10 +33,13 @@ struct EditItemView: View {
             }.navigationTitle(t("Επεξεργασία", "Edit Item")).navigationBarTitleDisplayMode(.inline).id(appLanguage)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(t("Ακύρωση", "Cancel")) { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button(t("Αποθήκευση", "Save")) { save() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
             .sheet(isPresented: $showingScanner) { BarcodeScannerSheet { barcode = $0 } }
-            .fullScreenCover(isPresented: $showingCamera) { CameraPicker { image in photoData = image.jpegData(compressionQuality: 0.82) } }
+            .alert(t("Η αποθήκευση απέτυχε", "Save failed"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: { Text(saveError ?? "") }
+        .fullScreenCover(isPresented: $showingCamera) { CameraPicker { image in photoData = image.jpegData(compressionQuality: 0.82) } }
         }
     }
     @ViewBuilder private var photoPreview: some View { if let photoData, let image = UIImage(data: photoData) { Image(uiImage: image).resizable().scaledToFill().frame(width: 70, height: 70).clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous)) } else { RoundedRectangle(cornerRadius: 15).fill(.quaternary).frame(width: 70, height: 70).overlay { Image(systemName: "camera.fill").foregroundStyle(.secondary) } } }
     private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό", "Water"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
-    private func save() { item.name = name.trimmingCharacters(in: .whitespacesAndNewlines); item.category = category; item.quantity = quantity; item.unit = unit; item.expirationDate = hasExpiration ? expirationDate : nil; item.storageLocation = storageLocation; item.notes = notes; item.barcode = barcode; item.photoData = photoData; item.litersPerUnit = category == .water ? litersPerUnit : 0; item.caloriesPerUnit = category == .food ? caloriesPerUnit : 0; item.updatedAt = .now; try? modelContext.save(); Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
+    private func save() { item.name = name.trimmingCharacters(in: .whitespacesAndNewlines); item.category = category; item.quantity = quantity; item.unit = unit; item.expirationDate = hasExpiration ? expirationDate : nil; item.storageLocation = storageLocation; item.notes = notes; item.barcode = barcode; item.photoData = photoData; item.litersPerUnit = category == .water ? litersPerUnit : 0; item.caloriesPerUnit = category == .food ? caloriesPerUnit : 0; item.updatedAt = .now; do { try modelContext.save() } catch { saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
 }

@@ -4,7 +4,7 @@ struct ContentView: View {
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue
     @State private var selectedTab: ReadyKitTab = .home
     @State private var showingScanner = false
-    @State private var showingAddItem = false
+    @State private var addItemRequest: AddItemRequest?
     @State private var scannedBarcode = ""
 
     private var isGreek: Bool { appLanguage == AppLanguage.greek.rawValue }
@@ -28,15 +28,20 @@ struct ContentView: View {
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $showingScanner, onDismiss: {
             guard !scannedBarcode.isEmpty else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { showingAddItem = true }
+            addItemRequest = AddItemRequest(barcode: scannedBarcode)
         }) {
             BarcodeScannerSheet { code in scannedBarcode = code; showingScanner = false }
         }
-        .sheet(isPresented: $showingAddItem, onDismiss: { scannedBarcode = "" }) {
-            AddItemView(initialBarcode: scannedBarcode)
+        .sheet(item: $addItemRequest, onDismiss: { scannedBarcode = "" }) { request in
+            AddItemView(initialBarcode: request.barcode)
         }
         .id(appLanguage)
     }
+}
+
+private struct AddItemRequest: Identifiable {
+    let id = UUID()
+    let barcode: String
 }
 
 private enum ReadyKitTab: Hashable { case home, inventory, preparedness, settings }

@@ -57,12 +57,14 @@ actor ProductLookupService {
         guard let url = components.url else { throw ProductLookupError.invalidBarcode }
         var request = URLRequest(url: url); request.timeoutInterval = 12; request.setValue("ReadyKit/1.0 (iOS; barcode product lookup)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { throw ProductLookupError.invalidResponse }
+        guard let http = response as? HTTPURLResponse else { throw ProductLookupError.invalidResponse }
+        if http.statusCode == 404 { throw ProductLookupError.notFound }
+        guard (200...299).contains(http.statusCode) else { throw ProductLookupError.invalidResponse }
         let decoded = try JSONDecoder().decode(Response.self, from: data); guard decoded.status == 1, let product = decoded.product else { throw ProductLookupError.notFound }
         let productName = product.productName?.trimmingCharacters(in: .whitespacesAndNewlines); let brand = product.brands?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName: String
         if let productName, !productName.isEmpty { resolvedName = productName } else if let brand, !brand.isEmpty { resolvedName = brand } else { throw ProductLookupError.notFound }
-        let imageString = product.imageFrontURL ?? product.imageURL
+        let imageString = [product.imageFrontURL, product.imageURL].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty && URL(string: $0)?.scheme == "https" }
         return ProductLookupResult(name: resolvedName, brand: brand?.isEmpty == false ? brand : nil, quantityText: product.quantity, imageURL: imageString.flatMap(URL.init(string:)), caloriesPer100g: product.nutriments?.energyKcal100g, productQuantity: product.productQuantity, productQuantityUnit: product.productQuantityUnit, categories: product.categories)
     }
 
