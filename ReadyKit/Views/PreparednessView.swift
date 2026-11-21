@@ -18,6 +18,7 @@ struct PreparednessView: View {
                 ScrollView {
                     VStack(spacing: 14) {
                         heroHeader
+                        NavigationLink { PreparednessCoachView() } label: { Label(t("Προτάσεις & σενάρια", "Suggestions & scenarios"), systemImage: "sparkles") }.tint(.green)
                         targetCard
                         suppliesCard
                         essentialDashboard
@@ -99,7 +100,7 @@ struct PreparednessView: View {
     }
 
     private var methodologyNote: some View {
-        Text(t("Οι υπολογισμοί βασίζονται σε 3 L νερού και 2.000 kcal ανά άτομο/ημέρα.", "Calculations use 3 L of water and 2,000 kcal per person/day."))
+        Text(t("Σχεδιασμός: 4 L αποθηκευμένου νερού και ενδεικτικά 2.000 kcal ανά άτομο/ημέρα. Δεν είναι εξατομικευμένη διατροφή ή συνολική ετοιμότητα. Ληγμένα είδη εξαιρούνται· άγνωστα λίτρα/θερμίδες δεν προσμετρώνται. Έλεγξε λήξεις, συντήρηση και ανάγκες μαγειρέματος στον Σύμβουλο.", "Planning: 4 L of stored water and an illustrative 2,000 kcal per person/day. Not personalized nutrition or overall readiness. Expired stock is excluded; unknown liters/calories are not counted. Review expiry, storage and cooking needs in Coach."))
             .font(.caption2).foregroundStyle(.white.opacity(0.38)).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
     }
 
@@ -142,12 +143,11 @@ struct PreparednessView: View {
     }
 
     private func miniCategory(_ category: ItemCategory, title: String, accent: Color) -> some View {
-        let p = categoryProgress(category)
         return NavigationLink { InventoryView(category: category) } label: {
             VStack(spacing: 4) {
                 Image(systemName: category.symbol).font(.caption.bold()).foregroundStyle(accent)
                 Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.65)
-                Text("\(Int(p * 100))%").font(.caption2.bold()).foregroundStyle(accent)
+                Text(categoryStatus(category)).font(.caption2.bold()).foregroundStyle(accent)
             }.frame(maxWidth: .infinity, minHeight: 58).background(accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(accent.opacity(0.25)))
         }.buttonStyle(.plain)
     }
@@ -160,7 +160,7 @@ struct PreparednessView: View {
                     Circle().stroke(.white.opacity(0.10), lineWidth: 8)
                     Circle().trim(from: 0, to: progress).stroke(accent, style: StrokeStyle(lineWidth: 8, lineCap: .round)).rotationEffect(.degrees(-90))
                     VStack(spacing: 2) {
-                        Text("\(Int(progress * 100))%").font(.caption.bold().monospacedDigit()).foregroundStyle(.white)
+                        Text(category == .water || category == .food ? "\(Int(progress * 100))%" : "—").font(.caption.bold().monospacedDigit()).foregroundStyle(.white)
                         Image(systemName: category.symbol).font(.caption.bold()).foregroundStyle(accent)
                     }
                 }.frame(width: 72, height: 72)
@@ -172,7 +172,11 @@ struct PreparednessView: View {
     private func categoryProgress(_ category: ItemCategory) -> Double {
         if category == .water { return min(1, calculator.waterProgress) }
         if category == .food { return min(1, calculator.foodProgress) }
-        return items.contains { $0.category == category && $0.quantity > 0 } ? 1 : 0
+        return 0 // A category entry does not establish complete preparedness.
+    }
+
+    private func categoryStatus(_ category: ItemCategory) -> String {
+        calculator.countedItems.contains { $0.category == category } ? t("Έλεγχος", "Review") : t("Χωρίς εγγραφή", "Not logged")
     }
 
     private func format(_ value: Double, decimals: Int) -> String { value.formatted(.number.precision(.fractionLength(decimals))) }
@@ -186,3 +190,4 @@ private extension View {
             .overlay(RoundedRectangle(cornerRadius: 24).stroke(accent.opacity(0.24), lineWidth: 0.8))
     }
 }
+

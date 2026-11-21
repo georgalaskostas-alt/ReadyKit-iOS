@@ -6,7 +6,8 @@ struct HomeView: View {
     @AppStorage("protectedPeople") private var protectedPeople = 4
     @AppStorage("targetDays") private var targetDays = 90
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue
-    @State private var showingAddItem = false
+    @State private var addRequest: HomeAddRequest?
+    @State private var pendingBarcode = ""
     @State private var showingQuickScanner = false
 
     private var calculator: ReadinessCalculator { ReadinessCalculator(items: items, people: protectedPeople, targetDays: targetDays) }
@@ -14,10 +15,7 @@ struct HomeView: View {
     private var expired: Int { items.filter { $0.expirationStatus == .expired }.count }
     private var healthy: Int { items.filter { $0.expirationStatus == .good || $0.expirationStatus == .noExpiration }.count }
     private var readiness: Int {
-        guard !items.isEmpty else { return 0 }
-        let expiryScore = (Double(healthy) + Double(expiringSoon) * 0.65) / Double(items.count)
-        let supplyScore = (calculator.waterProgress + calculator.foodProgress) / 2
-        return Int((min(1, expiryScore * 0.45 + supplyScore * 0.55) * 100).rounded())
+        Int((calculator.supplyCoverage * 100).rounded(.down))
     }
 
     var body: some View {
@@ -28,6 +26,12 @@ struct HomeView: View {
                     VStack(spacing: 14) {
                         hero
                         supplyCards
+                        CoachHighlightsView()
+                        NavigationLink { PreparednessCoachView() } label: {
+                            Label(t("Σύμβουλος • Προτάσεις & σενάρια", "Coach • Suggestions & scenarios"), systemImage: "sparkles")
+                                .font(.headline).frame(maxWidth: .infinity, alignment: .leading).padding(18)
+                                .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 20))
+                        }.buttonStyle(.plain).foregroundStyle(.green)
                         quickActions
                         categoriesSection
                         attentionSection
@@ -41,18 +45,19 @@ struct HomeView: View {
             .navigationTitle("ReadyKit")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingAddItem = true } label: {
+                    Button { addRequest = HomeAddRequest(barcode: "") } label: {
                         Image(systemName: "plus").font(.title3.bold()).foregroundStyle(.white)
                             .frame(width: 42, height: 42).background(.green, in: Circle())
                     }
                 }
             }
-            .sheet(isPresented: $showingAddItem) { AddItemView() }
-            .sheet(isPresented: $showingQuickScanner) {
-                BarcodeScannerSheet { _ in
-                    showingQuickScanner = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showingAddItem = true }
-                }
+            .sheet(item: $addRequest) { request in AddItemView(initialBarcode: request.barcode) }
+            .sheet(isPresented: $showingQuickScanner, onDismiss: {
+                guard !pendingBarcode.isEmpty else { return }
+                addRequest = HomeAddRequest(barcode: pendingBarcode)
+                pendingBarcode = ""
+            }) {
+                BarcodeScannerSheet { code in pendingBarcode = code; showingQuickScanner = false }
             }
             .id(appLanguage)
         }
@@ -68,7 +73,7 @@ struct HomeView: View {
                     HStack(alignment: .bottom, spacing: 10) {
                         VStack(alignment: .leading, spacing: 5) {
                             Label(t("ΕΤΟΙΜΟΤΗΤΑ ΟΙΚΟΓΕΝΕΙΑΣ", "HOUSEHOLD READINESS"), systemImage: "shield.fill").font(.caption2.bold()).tracking(1).foregroundStyle(.green).lineLimit(1)
-                            Text(t("Η ετοιμότητά σου", "Your preparedness")).font(.title2.bold()).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.75)
+                            Text(t("Κάλυψη νερού & τροφής", "Water & food coverage")).font(.title2.bold()).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.75)
                             Text(t("\(protectedPeople) άτομα • στόχος \(targetLabel)", "\(protectedPeople) people • \(targetLabel) target")).font(.subheadline).foregroundStyle(.white.opacity(0.72)).lineLimit(1).minimumScaleFactor(0.8)
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         readinessRing
@@ -87,7 +92,7 @@ struct HomeView: View {
         ZStack {
             Circle().stroke(.white.opacity(0.18), lineWidth: 9)
             Circle().trim(from: 0, to: Double(readiness) / 100).stroke(readinessColor, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90))
-            VStack(spacing: 0) { Text("\(readiness)%").font(.title3.bold().monospacedDigit()).foregroundStyle(.white); Text("READY").font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.58)) }
+            VStack(spacing: 0) { Text("\(readiness)%").font(.title3.bold().monospacedDigit()).foregroundStyle(.white); Text(t("ΑΠΟΘΕΜΑ", "STOCK")).font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.58)) }
         }.frame(width: 78, height: 78)
     }
 
@@ -196,6 +201,11 @@ struct HomeView: View {
     private func t(_ el: String, _ en: String) -> String { appLanguage == AppLanguage.english.rawValue ? en : el }
     private func categoryAccent(_ c: ItemCategory) -> Color { switch c { case .water: return .cyan; case .food: return .orange; case .firstAid: return .red; case .medication: return .purple; case .power: return .yellow; case .hygiene: return .cyan; default: return .green } }
     private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό & Ροφήματα", "Water & Drinks"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φως", "Power & Light"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
+}
+
+private struct HomeAddRequest: Identifiable {
+    let id = UUID()
+    let barcode: String
 }
 
 private struct SupplyImageCard: View {
