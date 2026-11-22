@@ -5,6 +5,9 @@ import PhotosUI
 struct AddItemView: View {
     @Environment(\.dismiss) private var dismiss; @Environment(\.modelContext) private var modelContext
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue; @Query private var existingItems: [EmergencyItem]
+    @State private var cooking = "unknown"
+    @State private var refrigeration = "unknown"
+    @State private var allergens = ""
     @State private var saveError: String?
     @State private var name = ""; @State private var category: ItemCategory = .food; @State private var quantity = 1; @State private var unit = "pcs"
     @State private var hasExpiration = false; @State private var expirationDate = Date.now; @State private var storageLocation = "Emergency Kit"; @State private var notes = ""; @State private var barcode: String
@@ -38,6 +41,7 @@ struct AddItemView: View {
                 else { Label(t("Δεν έχει οριστεί ημερομηνία λήξης", "Expiration date not set"), systemImage: "calendar.badge.questionmark").font(.footnote).foregroundStyle(.secondary) }
                 if let expiryMessage { Text(expiryMessage).font(.footnote).foregroundStyle(hasExpiration ? .green : .orange) }
             }
+            if category == .food { FoodPlanningFields(cooking: $cooking, refrigeration: $refrigeration, allergens: $allergens) }
             Section(t("Αποθήκευση", "Storage")) { TextField(t("Τοποθεσία", "Location"), text: $storageLocation); TextField(t("Σημειώσεις", "Notes"), text: $notes, axis: .vertical).lineLimit(3...6) }
         }
         .navigationTitle(t("Νέο προϊόν", "New Item")).navigationBarTitleDisplayMode(.inline)
@@ -82,5 +86,5 @@ struct AddItemView: View {
     }
     private func saveOrCheckDuplicate() { let code = barcode.trimmingCharacters(in: .whitespacesAndNewlines); if !code.isEmpty, let existing = existingItems.first(where: { $0.barcode == code }) { duplicateItem = existing; showingDuplicateAlert = true } else { saveNewItem() } }
     private func addQuantity(to existing: EmergencyItem) { let oldQuantity = existing.quantity; let oldDate = existing.updatedAt; let oldPhoto = existing.photoData; existing.quantity += quantity; existing.updatedAt = .now; if let photoData { existing.photoData = photoData }; do { try modelContext.save() } catch { existing.quantity = oldQuantity; existing.updatedAt = oldDate; existing.photoData = oldPhoto; saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: existing) }; dismiss() }
-    private func saveNewItem() { let item = EmergencyItem(name: name.trimmingCharacters(in: .whitespacesAndNewlines), category: category, quantity: quantity, unit: unit, expirationDate: hasExpiration ? expirationDate : nil, storageLocation: storageLocation, notes: notes, barcode: barcode, photoData: photoData, litersPerUnit: category == .water ? litersPerUnit : 0, caloriesPerUnit: category == .food ? caloriesPerUnit : 0); modelContext.insert(item); do { try modelContext.save() } catch { modelContext.delete(item); saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
+    private func saveNewItem() { let item = EmergencyItem(name: name.trimmingCharacters(in: .whitespacesAndNewlines), category: category, quantity: quantity, unit: unit, expirationDate: hasExpiration ? expirationDate : nil, storageLocation: storageLocation, notes: notes, barcode: barcode, photoData: photoData, litersPerUnit: category == .water ? litersPerUnit : 0, caloriesPerUnit: category == .food ? caloriesPerUnit : 0); item.requiresCookingRaw = cooking; item.requiresRefrigerationRaw = refrigeration; item.allergenNotes = allergens; modelContext.insert(item); do { try modelContext.save() } catch { modelContext.delete(item); saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
 }

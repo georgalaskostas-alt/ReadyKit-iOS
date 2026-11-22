@@ -42,6 +42,10 @@ struct SettingsView: View {
                     LabeledContent(t("Επιλεγμένος στόχος", "Selected target"), value: autonomyLabel)
                 }
 
+                Section(t("Προφίλ ετοιμότητας", "Preparedness profile")) {
+                    NavigationLink { HouseholdProfileView() } label: { Label(t("Οικογενειακό προφίλ", "Household profile"), systemImage: "person.2") }
+                }
+
                 Section(t("Ειδοποιήσεις", "Notifications")) {
                     Button(t("Ενεργοποίηση ειδοποιήσεων", "Enable notifications")) {
                         Task {
@@ -74,3 +78,4 @@ struct SettingsView: View {
         }
     }
 }
+

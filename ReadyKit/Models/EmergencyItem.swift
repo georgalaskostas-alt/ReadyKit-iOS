@@ -16,6 +16,11 @@ final class EmergencyItem {
     var createdAt: Date
     var updatedAt: Date
 
+    // Optional fields preserve unknown values for existing inventories.
+    var requiresCookingRaw: String?
+    var requiresRefrigerationRaw: String?
+    var allergenNotes: String?
+
     // Optional planning data. Used to calculate real emergency autonomy.
     var litersPerUnit: Double
     var caloriesPerUnit: Double
@@ -33,6 +38,9 @@ final class EmergencyItem {
         litersPerUnit: Double = 0,
         caloriesPerUnit: Double = 0
     ) {
+        self.requiresCookingRaw = nil
+        self.requiresRefrigerationRaw = nil
+        self.allergenNotes = nil
         self.id = UUID()
         self.name = name
         self.categoryRaw = category.rawValue
@@ -118,3 +126,4 @@ enum ExpirationStatus {
         }
     }
 }
+

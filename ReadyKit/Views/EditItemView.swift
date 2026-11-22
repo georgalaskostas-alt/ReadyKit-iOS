@@ -7,6 +7,9 @@ struct EditItemView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.greek.rawValue
     let item: EmergencyItem
+    @State private var cooking = "unknown"
+    @State private var refrigeration = "unknown"
+    @State private var allergens = ""
     @State private var saveError: String?
     @State private var name: String; @State private var category: ItemCategory; @State private var quantity: Int; @State private var unit: String
     @State private var hasExpiration: Bool; @State private var expirationDate: Date; @State private var storageLocation: String; @State private var notes: String; @State private var barcode: String
@@ -14,6 +17,7 @@ struct EditItemView: View {
     private var isGreek: Bool { appLanguage == AppLanguage.greek.rawValue }; private func t(_ el: String, _ en: String) -> String { isGreek ? el : en }
 
     init(item: EmergencyItem) {
+        _cooking = State(initialValue: item.requiresCookingRaw ?? "unknown"); _refrigeration = State(initialValue: item.requiresRefrigerationRaw ?? "unknown"); _allergens = State(initialValue: item.allergenNotes ?? "")
         self.item = item; _name = State(initialValue: item.name); _category = State(initialValue: item.category); _quantity = State(initialValue: item.quantity); _unit = State(initialValue: item.unit); _hasExpiration = State(initialValue: item.expirationDate != nil); _expirationDate = State(initialValue: item.expirationDate ?? .now); _storageLocation = State(initialValue: item.storageLocation); _notes = State(initialValue: item.notes); _barcode = State(initialValue: item.barcode); _litersPerUnit = State(initialValue: item.litersPerUnit); _caloriesPerUnit = State(initialValue: item.caloriesPerUnit); _photoData = State(initialValue: item.photoData)
     }
 
@@ -29,6 +33,7 @@ struct EditItemView: View {
                 if category == .water { Section(t("Νερό", "Water")) { TextField(t("Λίτρα ανά τεμάχιο", "Liters per item"), value: $litersPerUnit, format: .number).keyboardType(.decimalPad) } }
                 if category == .food { Section(t("Τρόφιμα", "Food")) { TextField(t("Θερμίδες ανά τεμάχιο", "Calories per item"), value: $caloriesPerUnit, format: .number).keyboardType(.decimalPad) } }
                 Section(t("Λήξη", "Expiration")) { Toggle(t("Έχει ημερομηνία λήξης", "Has expiration date"), isOn: $hasExpiration); if hasExpiration { DatePicker(t("Ημερομηνία", "Date"), selection: $expirationDate, displayedComponents: .date) } else { Label(t("Δεν έχει οριστεί ημερομηνία λήξης", "Expiration date not set"), systemImage: "calendar.badge.questionmark").font(.footnote).foregroundStyle(.secondary) } }
+                if category == .food { FoodPlanningFields(cooking: $cooking, refrigeration: $refrigeration, allergens: $allergens) }
                 Section(t("Στοιχεία", "Details")) { HStack { TextField("Barcode", text: $barcode); Button { showingScanner = true } label: { Image(systemName: "barcode.viewfinder").font(.title2) }.buttonStyle(.plain) }; TextField(t("Τοποθεσία", "Location"), text: $storageLocation); TextField(t("Σημειώσεις", "Notes"), text: $notes, axis: .vertical).lineLimit(3...6) }
             }.navigationTitle(t("Επεξεργασία", "Edit Item")).navigationBarTitleDisplayMode(.inline).id(appLanguage)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(t("Ακύρωση", "Cancel")) { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button(t("Αποθήκευση", "Save")) { save() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
@@ -41,5 +46,5 @@ struct EditItemView: View {
     }
     @ViewBuilder private var photoPreview: some View { if let photoData, let image = UIImage(data: photoData) { Image(uiImage: image).resizable().scaledToFill().frame(width: 70, height: 70).clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous)) } else { RoundedRectangle(cornerRadius: 15).fill(.quaternary).frame(width: 70, height: 70).overlay { Image(systemName: "camera.fill").foregroundStyle(.secondary) } } }
     private func categoryName(_ c: ItemCategory) -> String { switch c { case .water: return t("Νερό", "Water"); case .food: return t("Τρόφιμα", "Food"); case .firstAid: return t("Πρώτες βοήθειες", "First Aid"); case .medication: return t("Φάρμακα", "Medication"); case .power: return t("Ρεύμα & Φωτισμός", "Power & Lighting"); case .hygiene: return t("Υγιεινή", "Hygiene"); case .tools: return t("Εξοπλισμός", "Equipment"); case .documents: return t("Έγγραφα", "Documents"); case .other: return t("Άλλο", "Other") } }
-    private func save() { item.name = name.trimmingCharacters(in: .whitespacesAndNewlines); item.category = category; item.quantity = quantity; item.unit = unit; item.expirationDate = hasExpiration ? expirationDate : nil; item.storageLocation = storageLocation; item.notes = notes; item.barcode = barcode; item.photoData = photoData; item.litersPerUnit = category == .water ? litersPerUnit : 0; item.caloriesPerUnit = category == .food ? caloriesPerUnit : 0; item.updatedAt = .now; do { try modelContext.save() } catch { saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
+    private func save() { item.name = name.trimmingCharacters(in: .whitespacesAndNewlines); item.category = category; item.quantity = quantity; item.unit = unit; item.expirationDate = hasExpiration ? expirationDate : nil; item.storageLocation = storageLocation; item.notes = notes; item.barcode = barcode; item.photoData = photoData; item.litersPerUnit = category == .water ? litersPerUnit : 0; item.caloriesPerUnit = category == .food ? caloriesPerUnit : 0; item.requiresCookingRaw = cooking; item.requiresRefrigerationRaw = refrigeration; item.allergenNotes = allergens; item.updatedAt = .now; do { try modelContext.save() } catch { saveError = error.localizedDescription; return }; Task { await NotificationManager.shared.scheduleExpirationNotifications(for: item) }; dismiss() }
 }

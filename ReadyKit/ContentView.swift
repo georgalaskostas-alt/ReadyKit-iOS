@@ -10,20 +10,19 @@ struct ContentView: View {
     private var isGreek: Bool { appLanguage == AppLanguage.greek.rawValue }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .home: HomeView()
-                case .inventory: InventoryView()
-                case .preparedness: PreparednessView()
-                case .settings: SettingsView()
-                }
+        Group {
+            switch selectedTab {
+            case .home: HomeView()
+            case .inventory: InventoryView()
+            case .preparedness: PreparednessView()
+            case .settings: SettingsView()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 86) }
-
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             ReadyKitFloatingDock(selectedTab: $selectedTab, isGreek: isGreek, scanAction: { showingScanner = true })
-                .padding(.horizontal, 14).padding(.bottom, 5)
+                .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 5)
+                .background(Color.black)
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $showingScanner, onDismiss: {
@@ -91,3 +90,4 @@ private struct ReadyKitFloatingDock: View {
 }
 
 #Preview { ContentView() }
+
